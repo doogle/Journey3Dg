@@ -35,7 +35,7 @@ pwm.deinit()
 # When running at frequencies above ~260MHz, uPython's calculations for the DIV and TOP registers give incorrect
 # values. This is a table of DIV and TOP values for each note starting from 2 octaves below middle A, calculated
 # by genfreqs.c, which uses a brute-force approach to find the best settings for each notes.
-# Also, the resulting frequencies are exactly (two 2 decimal places) the note frequency, rather than only being
+# Also, the resulting frequencies are exactly (to 2 decimal places) the note frequency, rather than only being
 # able to specify an integer frequency as with usual machine.PWM usage.
 # We will still use machine.PWM to simplify initialisation.
 # This table is generated using genfreqs.c
@@ -263,23 +263,11 @@ class MusicPlayer:
     @micropython.native
     def init(self):
         self.want_init = False
-        #self.seed_next()
+        self.seed_next()
 
-        #self.pwm_widths = None
-        #self.chord_prog_chords = None
-        #self.chord_prog = None
-        #self.chord = None
-        #self.note_dur_opts = None
-        #self.note_delay_opts = None
-        #self.note_dur_patts = None
-        #self.note_delay_patts = None
-        #self.note_chord_patts = None
-        #self.note_oct_patts = None
-        #gc.collect()
-        
         self.bpm = random.randrange(74, 110)
         #self.beat_samp_cnt = int(self.frame_rate * (60/(self.bpm * 4)))
-        self.beat_samp_cnt = ((self.frame_rate * 3932160 // (self.bpm * 4)) + 32768) >> 16
+        self.beat_samp_cnt = ((self.frame_rate * 3932160 // (self.bpm * 4)) + 32767) >> 16
 
         self.key_note = random.randrange(12)
         self.key_scale_off = random.randrange(7)
@@ -331,10 +319,6 @@ class MusicPlayer:
         for i in range(4):
             self.init_chord_prog[i] = self.chord_prog[i]
 
-        #self.init_note_dur_patts = self.note_dur_patts
-        #self.init_note_delay_patts = self.note_delay_patts
-        #self.init_note_chord_patts = self.note_chord_patts
-        #self.init_note_oct_patts = self.note_oct_patts
         _copy_pat_array(self.init_note_dur_patts, self.note_dur_patts)
         _copy_pat_array(self.init_note_delay_patts, self.note_delay_patts)
         _copy_pat_array(self.init_note_chord_patts, self.note_chord_patts)
@@ -342,7 +326,6 @@ class MusicPlayer:
 
         self.chord_prog_reord = not random.getrandbits(1)
         self.chord_prog_jump = not random.getrandbits(1)
-        #gc.collect()
 
 
     @micropython.native
