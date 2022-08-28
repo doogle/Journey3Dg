@@ -84,9 +84,9 @@ def version_check():
         import thumby
         thumby.display.fill(0)
         thumby.display.drawText('Needs v1.19', 0, 0, 1)
-        thumby.display.drawText('Pls update', 0, 9, 1)
-        thumby.display.drawText('Thumby using', 0, 18, 1)
-        thumby.display.drawText('code editor', 0, 27, 1)
+        thumby.display.drawText('Pls update', 0, 12, 1)
+        thumby.display.drawText('Thumby using', 0, 21, 1)
+        thumby.display.drawText('code editor', 0, 20, 1)
         thumby.display.display.show()
         while not thumby.inputPressed():
             sleep_ms(1)
@@ -134,7 +134,7 @@ def end():
 if version_check():
     start()
 
-    # Importing and initialising Journey3D_main.py takes a little while.
+    # Importing and initialising Journey3Dg_main.py takes a little while.
     # We record the start time, and once the module is loaded calculate a delta.
     # This allows us to show the loading/help screen for a known duration, while
     # also absorbing the module load/init time.
