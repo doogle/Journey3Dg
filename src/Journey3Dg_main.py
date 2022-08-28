@@ -1399,10 +1399,62 @@ def draw_ground():
         o += 1
 
 
+fade_out = False
+next_tune_pressed = False ; next_tune_cnt = 0
+mute_toggling = False ; mute_toggle_cnt = 0
+
+@micropython.native
+def handle_input():
+    global player, fade_out
+    global next_tune_pressed, next_tune_cnt
+    global mute_toggling, mute_toggle_cnt
+
+    if swB.value() == 0:
+        fade_out = True
+
+    # We need to debounce the A button to avoid switching tune too rapidly
+    if swA.value() == 0:
+        if not next_tune_pressed:
+            player.next_tune()
+            next_tune_pressed = True
+        next_tune_cnt = 10
+    elif next_tune_pressed:
+        next_tune_cnt -= 1
+        if next_tune_cnt == 0:
+            next_tune_pressed = False
+
+    # We need to debounce the d-pad to avoid toggling mute too quickly
+    if swL.value() ^ swR.value() | swU.value() ^ swD.value():
+        if not mute_toggling:
+            player.toggle_mute()
+            mute_toggling = True
+        mute_toggle_cnt = 10
+    elif mute_toggling:
+        mute_toggle_cnt -= 1
+        if mute_toggle_cnt == 0:
+            mute_toggling = False
+
+
+@micropython.native
+def shape_update():
+    global shape, shape_cube, shape_ball, shape_ind, shape_ind_next
+    if shape_ind_next == shape_ind_cube:
+        shape_ind = shape_ind_cube
+        shape = shape_cube
+        shape_cube.pos[0] = shape_ball.pos[0]
+        shape_cube.pos[2] = shape_ball.pos[2]
+        shape_ind_next = -1
+    elif shape_ind_next == shape_ind_ball:
+        shape_ind = shape_ind_ball
+        shape = shape_ball
+        shape_ball.pos[0] = shape_cube.pos[0]
+        shape_ball.pos[2] = shape_cube.pos[2]
+        shape_ind_next = -1
+
+
 @micropython.native
 def main(on_load):
     global player, disp, road, stars, mountains
-    global shape, shape_cube, shape_ball, shape_ind, shape_ind_next
 
     if on_load:
         on_load()
@@ -1410,8 +1462,7 @@ def main(on_load):
     disp.start()
     try:
         fps = -1
-        mute_toggling = False ; mute_toggle_cnt = 0
-        fade_out = False ; fade_contrast = 255 ; fade_cnt = 3
+        fade_contrast = 255 ; fade_cnt = 3
         mountain_x_speed = 0 ; mountain_x = 0
 
         player.start()
@@ -1448,38 +1499,12 @@ def main(on_load):
             move_shape()
             shape.draw()
 
-            if shape_ind_next == shape_ind_cube:
-                shape_ind = shape_ind_cube
-                shape = shape_cube
-                shape_cube.pos[0] = shape_ball.pos[0]
-                shape_cube.pos[2] = shape_ball.pos[2]
-                shape_ind_next = -1
-            elif shape_ind_next == shape_ind_ball:
-                shape_ind = shape_ind_ball
-                shape = shape_ball
-                shape_ball.pos[0] = shape_cube.pos[0]
-                shape_ball.pos[2] = shape_cube.pos[2]
-                shape_ind_next = -1
+            shape_update()
 
             # uncomment to display FPS
             #disp.draw_text(str(fps>>4), 0, 0, 2)
 
-            if swB.value() == 0:
-                fade_out = True
-
-            if swA.value() == 0:
-                player.next_tune()
-
-            # We need to debounce the d-pad to avoid toggling mute too quickly
-            if swL.value() ^ swR.value() | swU.value() ^ swD.value():
-                if not mute_toggling:
-                    player.toggle_mute()
-                    mute_toggling = True
-                mute_toggle_cnt = 10
-            elif mute_toggling:
-                mute_toggle_cnt -= 1
-                if mute_toggle_cnt == 0:
-                    mute_toggling = False
+            handle_input()
 
             if fade_out:
                 fade_cnt -= 1
