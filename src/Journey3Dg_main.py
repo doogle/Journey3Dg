@@ -15,7 +15,7 @@
 # large speed increase.
 
 # There are five elements:
-# 1. A spinning 3D shape, shaded with a single light source, and rendered using ordered dithering.
+# 1. Spinning 3D shapes, shaded with a single light source, and rendered using ordered dithering.
 # 2. An Outrun style road, with a randomly generated series of bends.
 # 3. A starfield, adjusted to move horizontally with the road's curves.
 # 4. A mountain range horizon, also scrolling with the road's curves.
@@ -25,14 +25,12 @@
 # Button B (left) can be used to exit the application.
 # Any D pad button can be used to toggle audio mute.
 
-# In the main loop, everything (except tune regeneration) is done using Q16.16 fixed point arithmetic
+# In the main loop, everything is done using Q16.16 fixed point arithmetic
 #   https://en.wikipedia.org/wiki/Fixed-point_arithmetic
 #   http://x86asm.net/articles/fixed-point-arithmetic-and-tricks/
 # and a lookup table for sine/cosine.
 
 # I've used @micropython.viper and @micropython.native where I can to speed things up.
-# These benefit from type hints, which I haven't used before in Python. So I'm pretty
-# sure I've got some of the hints wrong for things like lists.
 
 # I've commented the code here and there, so please take a look through and grab any bits that
 # might be useful in your own scripts.
@@ -144,7 +142,7 @@ shadecnt = const(16) ; dith_r_spread = -shadecnt/4
 dith_xs = const(2) ; dith_ys = const(2)
 dith_w = const(1 << dith_xs) ; dith_h = const(1 << dith_ys)
 dith_w_mask = const(dith_w - 1) ; dith_h_mask = const(dith_h - 1)
-dither1:List[array] = list() ; dither2:List[array] = list()
+dither1 = list() ; dither2 = list()
 def split(l, n):
     for i in range(0,len(l),n):
         yield l[i:i+n]
@@ -157,7 +155,7 @@ def gen_bayer(x,y):
         xs = '{:0{width}b}'.format(x, width=dith_xs)
         ys = '{:0{width}b}'.format(y ^ (x << (dith_ys-dith_xs)), width=dith_ys)
         return int(''.join(reversed(''.join([i+j for i,j in zip(xs,split(ys,dith_ys // dith_xs))]))), 2)
-bayer_mat:List[List[int]] = [ [ (gen_bayer(x,y)+1)/(dith_w*dith_h) - 0.5 for x in range(dith_w) ] for y in range(dith_h) ]
+bayer_mat = [ [ (gen_bayer(x,y)+1)/(dith_w*dith_h) - 0.5 for x in range(dith_w) ] for y in range(dith_h) ]
 def fill_smallint(v):
     for i in range((30 // dith_w) - 1):
         v |= v << dith_w
@@ -396,7 +394,7 @@ def rastline(x0:int, y0:int, x1:int, y1:int, rastmin:ptr8, rastmax:ptr8):
 
 
 
-class Road():
+class Road:
     # We generate the curves on the fly
     #  https://codeincomplete.com/articles/javascript-racer-v2-curves/
     curve_len_opts = array('l', [2, 4, 7, 10])
@@ -512,8 +510,8 @@ class Road():
         seg_z = self.seg_z + speed
         if seg_z > int(self.z_front):
             self.botseg_dx = self.seg_dx
-            #self.seg_z = self.z_horizon
-            self.seg_z = self.z_horizon - (seg_z - int(self.z_front))
+            self.seg_z = self.z_horizon
+            #self.seg_z = self.z_horizon - (seg_z - int(self.z_front))
 
             self.curve_len -= 1
             if self.curve_state == Road.StateEaseIn:
@@ -590,13 +588,10 @@ class Shape:
         vertcnt = len(vertices)
         facecnt = len(faces)
         # local copies of vertices and faces
-        #self.vertices:List[Tuple[int,int,int]] = vertices.copy()
-        #self.vertices = array('O', [vertices])
         if calc_normals:
             self.vertices = array('O', vertices + ([None] * facecnt))
         else:
             self.vertices = array('O', vertices)
-        #self.faces:List[Tuple[List[int],Tuple[int,int]]] = faces.copy()
         self.faces = array('O', faces)
         # shape rotation axis vector, rotation angle, and position
         self.rot_axis = array('l', [0, fpone, 0])
@@ -805,7 +800,6 @@ class Shape:
                 self.rastface(f)
                 # and draw it
                 self.drawrast(s)
-                pass
             i += 1
 
 
@@ -815,13 +809,6 @@ class Shape:
     # the first vertex of the face.
     @micropython.viper
     def calc_shade(self, f) -> int:
-        #xl:int; yl:int; zl:int
-        #x0:int; y0:int; z0:int; x1:int; y1:int; z2:int
-        #vx:int; vy:int; vz:int; wx:int; wy:int; wz:int
-
-        #xl,yl,zl = light_pos
-        #x0,y0,z0 = self.pm[f[2][0]]
-        #x1,y1,z1 = self.pm[f[2][1]]
         pm = self.pm
         xl:int = int(light_pos[0]); yl:int = int(light_pos[1]); zl:int = int(light_pos[2])
         p0 = pm[f[2][0]]
@@ -829,8 +816,6 @@ class Shape:
         x0:int = int(p0[0]); y0:int = int(p0[1]); z0:int = int(p0[2])
         x1:int = int(p1[0]); y1:int = int(p1[1]); z1:int = int(p1[2])
 
-        #vx,vy,vz = xl-x0,yl-y0,zl-z0
-        #wx,wy,wz = x1-x0,y1-y0,z1-z0
         vx:int = xl-x0 ; vy:int = yl-y0 ; vz:int = zl-z0
         wx:int = x1-x0 ; wy:int = y1-y0 ; wz:int = z1-z0
 
