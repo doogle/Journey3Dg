@@ -222,7 +222,11 @@ class MusicPlayer:
         except:
             pass
 
-        self.seeds = seeds
+        if seeds is None:
+            self.seeds = []
+        else:
+            self.seeds = seeds
+        self.seeds_ind = 0
 
         self.root_notes = array('b', [0] * 7)
         #                            [ 0.1,   0.9,   0.6,   0.4]
@@ -244,23 +248,47 @@ class MusicPlayer:
         self.init_note_chord_patts = _make_pat_array('b')
         self.init_note_oct_patts = _make_pat_array('b')
         
+        self.seedfile = open("/Games/Journey3Dg/last_tune.txt", "w")
+        self.seedstr = bytearray(11)
+        self.seedstr[10] = 10
+
         self.init()
 
 
     # I realised while writing this that it would be nice if I could replay some tunes.
     # So a seed is generated randomly, and can then be specified again to play the exact
     # same tune.
+    # I previously challenged myself to avoid any memory allocation after the application
+    # has been initialised, which became a bit more important when there seemed to be issues
+    # running garbage collection with the second core running for greyscale, although this
+    # turned out to be a micropython v1.18 issue. Now that everything is more stable, I don't
+    # _need_ to avoid memory allocation, but I thought I'd still aim for that just for 'fun'.
+    # This leads to a bit of hoop jumping-through, as can be seen below.
+    @micropython.viper
     def seed_next(self):
-        if self.seeds is None or len(self.seeds) == 0:
-            seed = random.getrandbits(32)
+        if int(self.seeds_ind) >= int(len(self.seeds)):
+            seed = int(random.randrange(0, 16384)) * int(random.randrange(0, 65536))
         else:
-            seed = int(self.seeds.pop(0))
+            seed = int(self.seeds[int(self.seeds_ind)])
+            ptr32(self.seeds_ind)[0] = int(self.seeds_ind) + 1
         random.seed(seed)
-        print(f'Seed: {seed}')
         # Save the last seed to a file. If you want to replay a tune, you can grab the seed
         # from the file and pass a list containing it (and any other seeds) to the MusicPlayer constructor.
-        with open("/Games/Journey3Dg/last_tune.txt", "w") as seedfile:
-            seedfile.write(str(seed))
+        seedstr:ptr8 = ptr8(self.seedstr)
+        seedstr[9] = (seed % 10) + 0x30
+        v:int = int(seed) // 10
+        i:int = 8
+        while v != 0:
+            seedstr[i] = (v % 10) + 0x30
+            v //= 10
+            i -= 1
+        while i != -1:
+            seedstr[i] = 0x20
+            i -= 1
+        self.seedfile.seek(0, 0)
+        self.seedfile.write(self.seedstr)
+        print('Seed: ', seed)
+
 
     @micropython.native
     def init(self):
