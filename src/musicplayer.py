@@ -171,6 +171,8 @@ class MusicPlayer:
     ])
 
     # for a tune, we choose from a set of note durations, with 1 being a crochet (quarter note)
+    # the commented out numbers are the previous floating point values, the numbers actually used
+    # are Q16.16 fixed point.
     note_dur_sets = _mk_array2d('l', [
         #[1, 0.5, 0.7, 0.4, 2],
         [65536, 32768, 45875, 26214, 131072],
@@ -266,7 +268,6 @@ class MusicPlayer:
         self.seed_next()
 
         self.bpm = random.randrange(74, 110)
-        #self.beat_samp_cnt = int(self.frame_rate * (60/(self.bpm * 4)))
         self.beat_samp_cnt = ((self.frame_rate * 3932160 // (self.bpm * 4)) + 32767) >> 16
 
         self.key_note = random.randrange(12)
@@ -280,30 +281,18 @@ class MusicPlayer:
         self.phrase_num = 0
 
         self.chord_prog_chords = random.choice(MusicPlayer.chord_prog_opts)
-        #self.chord_prog = random_sample(self.chord_prog_chords * 4, k=4)
-        #self.chord_prog.sample_into(self.chord_prog_chords)
         sample_into(self.chord_prog, self.chord_prog_chords)
 
         self.chord = random.choice(MusicPlayer.chord_opts)
-        #self.note_dur_opts = [ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_dur_sets)]
-        #self.note_delay_opts = [ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_delay_sets)]
-        #self.note_dur_opts.set_contents([ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_dur_sets)])
-        #self.note_delay_opts.set_contents([ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_delay_sets)])
         nds = random.choice(MusicPlayer.note_dur_sets)
         self.note_dur_opts.set_len(len(nds))
         for i in range(len(nds)):
-            self.note_dur_opts[i] = int((self.beat_samp_cnt * random.choice(nds)) >> 16)
+            self.note_dur_opts[i] = int((self.beat_samp_cnt * nds[i]) >> 16)
         nds = random.choice(MusicPlayer.note_delay_sets)
         self.note_delay_opts.set_len(len(nds))
         for i in range(len(nds)):
-            self.note_delay_opts[i] = int((self.beat_samp_cnt * random.choice(nds)) >> 16)
+            self.note_delay_opts[i] = int((self.beat_samp_cnt * nds[i]) >> 16)
         nds = None
-
-        #self.note_dur_patts = [random_sample(self.note_dur_opts * 4, k=4) for i in range(3)]
-        #self.note_delay_patts = [random_sample(self.note_delay_opts * 4, k=4) for i in range(3)]
-
-        #self.note_chord_patts = [random_sample(self.chord * 2, k=4) for i in range(3)]
-        #self.note_oct_patts = [random_sample(list(range(3)) * 4, k=4) for i in range(3)]
 
         for i in range(3):
             sample_into(self.note_dur_patts[i], self.note_dur_opts)
@@ -315,7 +304,6 @@ class MusicPlayer:
         self.note_chord_seq = random.choice(MusicPlayer.bar_patt_opts)
         self.note_oct_seq = random.choice(MusicPlayer.bar_patt_opts)
 
-        #self.init_chord_prog = self.chord_prog
         for i in range(4):
             self.init_chord_prog[i] = self.chord_prog[i]
 
@@ -450,39 +438,25 @@ class MusicPlayer:
                 self.note_oct_seq = random.choice(MusicPlayer.bar_patt_opts)
         if self.phrase_num % 4 == 0:
             if random.randrange(3) == 0:
-                #self.note_dur_opts = [ int(self.beat_samp_cnt * d) for d in random.choice(MusicPlayer.note_dur_sets)]
-                #gc.collect()
-                #self.note_dur_opts.set_contents([ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_dur_sets)])
-
                 nds = random.choice(MusicPlayer.note_dur_sets)
                 self.note_dur_opts.set_len(len(nds))
                 for i in range(len(nds)):
-                    self.note_dur_opts[i] = int((self.beat_samp_cnt * random.choice(nds)) >> 16)
+                    self.note_dur_opts[i] = int((self.beat_samp_cnt * nds[i]) >> 16)
                 nds = None
-
             if random.randrange(3) == 0:
-                #self.note_delay_opts = [ int(self.beat_samp_cnt * d) for d in random.choice(MusicPlayer.note_delay_sets)]
-                #gc.collect()
-                #self.note_delay_opts.set_contents([ int((self.beat_samp_cnt * d) >> 16) for d in random.choice(MusicPlayer.note_delay_sets)])
-
                 nds = random.choice(MusicPlayer.note_delay_sets)
                 self.note_delay_opts.set_len(len(nds))
                 for i in range(len(nds)):
-                    self.note_delay_opts[i] = int((self.beat_samp_cnt * random.choice(nds)) >> 16)
+                    self.note_delay_opts[i] = int((self.beat_samp_cnt * nds[i]) >> 16)
                 nds = None
 
         if self.phrase_num % 8 == 0:
             if random.randrange(3) != 0:
-                #self.note_chord_patts = self.init_note_chord_patts
                 _copy_pat_array(self.note_chord_patts, self.init_note_chord_patts)
-                #self.note_oct_patts = self.init_note_oct_patts
                 _copy_pat_array(self.note_oct_patts, self.init_note_oct_patts)
             if random.randrange(3) != 0:
-                #self.note_dur_patts = self.init_note_dur_patts
                 _copy_pat_array(self.note_dur_patts, self.init_note_dur_patts)
-                #self.note_delay_patts = self.init_note_delay_patts
                 _copy_pat_array(self.note_delay_patts, self.init_note_delay_patts)
-                #self.chord_prog = self.init_chord_prog
                 for i in range(4):
                     self.chord_prog[i] = self.init_chord_prog[i]
         if self.phrase_num % 16 == 0:
