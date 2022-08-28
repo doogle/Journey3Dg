@@ -129,7 +129,6 @@ def end():
     display.show()
     fade_in()
     sleep_ms(800)
-    soft_reset()
 
 
 if version_check():
@@ -155,3 +154,4 @@ main(fade_out)
 
     end()
 
+soft_reset()
