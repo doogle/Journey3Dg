@@ -26,16 +26,6 @@ import struct
 import zlib
 import subprocess
 
-inst_outname = 'Journey3Dg.mpy'
-
-inst_files = [
-    'Games/Journey3Dg/Journey3Dg.mpy',
-    'Games/Journey3Dg/Journey3Dg_main.mpy',
-    'Games/Journey3Dg/musicplayer.mpy',
-    'Games/Journey3Dg/ssd1306grey.mpy'
-]
-
-#########################################################
 
 def write_uint8(fh, val):
     fh.write(struct.pack('B', val))
@@ -86,7 +76,7 @@ class SfxBuilder:
             for f in self.inst_files:
                 f.write_file(fh)
             inst_tab_start = fh.tell()
-            write_uint8(fh, len(inst_files))
+            write_uint8(fh, len(self.inst_files))
             write_uint32(fh, sum(( f.unpack_sz for f in self.inst_files )))
             for f in self.inst_files:
                 f.write_entry(fh)
