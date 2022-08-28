@@ -550,28 +550,31 @@ class Stars:
         stars = array('O', [None] * cnt)
         for i in range(cnt):
             stars[i] = array('l', [random.randrange(-200<<16, 200<<16),
-                          random.randrange(-10<<16, 100<<16),
+                          random.randrange(10<<16, 100<<16),
                           random.randrange(-1000<<16, 100<<16),
                           random.randrange(1,4)])
         self.stars = stars
 
-    def draw_update(self, xcentre, xdelta, speed):
+    @micropython.native
+    def draw_update(self, xcentre, ycentre, xdelta, speed):
         xcentre -= 36
+        ycentre -= 20
         for s in self.stars:
             # There are probably better ways to create a starfield, but we can just
             # use the 3D projection function.
             #x,y = project(s[0], s[1], s[2])
-            x = project_x(s[0], s[2])
-            y = project_y(s[1], s[2])
-            disp.pixel(x + xcentre, y, s[3])
+            x = project_x(s[0], s[2]) + xcentre
+            y = project_y(s[1], s[2]) + ycentre
+            disp.pixel(x, y, s[3])
             s[2] += speed
-            #s[1] += speed >> 4
-            if s[2] >= (100 << 16):
-                # if a star gets too close, re-initialise it at a random position in the distance
+
+            if not (0 <= x < 72 and 0 <= y < 40):
+                # if a star goes off the side of the screen, re-initialise it
+                # at a random position in the distance.
                 s[0] = random.randrange(-200<<16, 200<<16)
-                s[1] = random.randrange(-14<<16, 100<<16)
+                s[1] = random.randrange(10<<16, 100<<16)
                 s[2] = random.randrange(-1000<<16, -500<<16)
-                s[3] = random.randrange(1,3)
+                s[3] = random.randrange(1,4)
             else:
                 s[0] -= xdelta
 
@@ -1494,7 +1497,7 @@ def main(on_load):
             # We move the star field at a proportional rate to the road speed,
             # and we use an x offset so that the centre of the starfield scrolls laterally as
             # the road curves round.
-            stars.draw_update(rcx, road.botseg_dx << 4, road_speed << 2)
+            stars.draw_update(rcx, 25, road.botseg_dx << 4, road_speed << 2)
 
             move_shape()
             shape.draw()
