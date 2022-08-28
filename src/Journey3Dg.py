@@ -37,7 +37,7 @@ freq(280000000)
 
 display = SSD1306_SPI(72, 40, SPI(0, sck=Pin(18), mosi=Pin(19)), dc=Pin(17), res=Pin(20), cs=Pin(16))
 
-def _check_upython_version(major, minor, revision):
+def check_upython_version(major, minor, revision):
     up_ver = [int(s) for s in uname().release.split('.')]
     if up_ver[0] > major:
         return True
@@ -48,7 +48,7 @@ def _check_upython_version(major, minor, revision):
             return up_ver[2] >= revision
     return False
 
-def _fade_in():
+def fade_in():
     sleep_ms(28)
     for i in range(8):
         display.contrast(1 << i)
@@ -59,7 +59,7 @@ def _fade_in():
     display.contrast(127)
 
 @micropython.native
-def _fade_out():
+def fade_out():
     global display, t0
     sleep_ms(2800 - ticks_diff(ticks_ms(), t0))
     for i in range(7, -1, -1):
@@ -79,8 +79,8 @@ def _fade_out():
     display = None
 
 
-def _version_check():
-    if not _check_upython_version(1, 19, 1):
+def version_check():
+    if not check_upython_version(1, 19, 1):
         import thumby
         thumby.display.fill(0)
         thumby.display.drawText('Needs v1.19', 0, 0, 1)
@@ -94,7 +94,7 @@ def _version_check():
     return True
 
 
-def _start():
+def start():
     intro = bytearray((b'\x00\x00\x00\x00\x00\x00\x00@\x80\x82~\x02\x00p\x88\x88\x88p\x00x\x80\x80@\xf8\x00\xf8\x10'
                         b'\x08\x08\x10\x00\xf8\x10\x08\x08\xf0\x00p\xa8\xa8\xa80\x00\x18\xa0\xa0\xa0x\x00\x00\x00\x00'
                         b'\x00\x00\x00B\x82\x8a\x96b\x00\xfe\x82\x82D8\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x84'
@@ -114,9 +114,9 @@ def _start():
     display.buffer[:] = intro
     intro = None
     display.show()
-    _fade_in()
+    fade_in()
 
-def _end():
+def end():
     global display
     collect()
     display = SSD1306_SPI(72, 40, SPI(0, sck=Pin(18), mosi=Pin(19)), dc=Pin(17), res=Pin(20), cs=Pin(16))
@@ -127,13 +127,13 @@ def _end():
     sleep_ms(200)
     fb.text('End', 26, 16, 1)
     display.show()
-    _fade_in()
+    fade_in()
     sleep_ms(800)
     soft_reset()
 
 
-if _version_check():
-    _start()
+if version_check():
+    start()
 
     # Importing and initialising Journey3D_main.py takes a little while.
     # We record the start time, and once the module is loaded calculate a delta.
@@ -141,9 +141,9 @@ if _version_check():
     # also absorbing the module load/init time.
     t0 = ticks_ms()
 
-    _check_upython_version = None
-    _version_check = None
-    _start = None
+    check_upython_version = None
+    version_check = None
+    start = None
     collect()
 
     # We use exec() to delay the import operation
@@ -151,7 +151,7 @@ if _version_check():
 from Games.Journey3Dg.Journey3Dg_main import main
 main(fade_out)
 ''',
-    {'fade_out': _fade_out})
+    {'fade_out': fade_out})
 
-    _end()
+    end()
 
