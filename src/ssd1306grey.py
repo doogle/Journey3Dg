@@ -316,77 +316,139 @@ class SSD1306_SPI_Grey:
         self._state[SSD1306_SPI_Grey_StateIndex_CopyBuffs] = 0
 
 
+    # This has been rewritten to avoid calling any flash-based code during the main loop
+    # By handling SPI transfers, GPIO toggling, and time-related functionality directly, we avoid calling into
+    # any of micropython's flash-based native code.
+    # Since flash XIP (eXecute In Place) is disabled during flash program or erase operations, by ensuring that
+    # core 1 never tries to run flash-based code we avoid a crash/hang if core 0 tries to write to a file.
     @micropython.viper
     def _display_thread(self):
-        buffers = array('O', [self._buffer1, self._buffer2, self._buffer3])
-        post_frame_adj = array('O', [self.post_frame_adj[0], self.post_frame_adj[1], self.post_frame_adj[2]])
+        buffers:ptr32 = ptr32(array('L', [ptr8(self._buffer1), ptr8(self._buffer2), ptr8(self._buffer3)]))
+        post_frame_adj:ptr32 = ptr32(array('L', [ptr8(self.post_frame_adj[0]), ptr8(self.post_frame_adj[1]), ptr8(self.post_frame_adj[2])]))
         state:ptr32 = ptr32(self._state)
-        spi_write = self.spi.write
-        dc = self.dc
-        pre_frame_cmds:ptr = self.pre_frame_cmds
-        post_frame_cmds:ptr = self.post_frame_cmds
-        ticks_us = utime.ticks_us
-        ticks_diff = utime.ticks_diff
-        sleep_ms = utime.sleep_ms
-        sleep_us = utime.sleep_us
+        pre_frame_cmds:ptr8 = ptr8(self.pre_frame_cmds)
+        post_frame_cmds:ptr8 = ptr8(self.post_frame_cmds)
+
+        spi0:ptr32 = ptr32(0x4003c000)
+        tmr:ptr32 = ptr32(0x40054000)
+        sio:ptr32 = ptr32(0xd0000000)
 
         b1:ptr32 = ptr32(self.buffer1) ; b2:ptr32 = ptr32(self.buffer2)
         _b1:ptr32 = ptr32(self._buffer1) ; _b2:ptr32 = ptr32(self._buffer2) ; _b3:ptr32 = ptr32(self._buffer3)
+        pending_cmds:ptr8 = ptr8(self.pending_cmds)
 
         fn:int ; i:int ; t0:int
         v1:int ; v2:int ; contrast:int
+        spibuff:ptr8
 
         while state[SSD1306_SPI_Grey_StateIndex_State] == SSD1306_SPI_Grey_ThreadState_Waiting:
-            idle()
+            pass
 
         state[SSD1306_SPI_Grey_StateIndex_State] = SSD1306_SPI_Grey_ThreadState_Running
-        while True:
-            while state[SSD1306_SPI_Grey_StateIndex_State] == SSD1306_SPI_Grey_ThreadState_Running:
-                fn = 0
-                while fn < 3:
-                    t0 = ticks_us()
-                    dc(0)
-                    spi_write(pre_frame_cmds)
-                    dc(1)
-                    spi_write(buffers[fn])
-                    dc(0)
-                    spi_write(post_frame_adj[fn])
-                    sleep_us(SSD1306_SPI_Grey_pre_frame_time_us - int(ticks_diff(ticks_us(), t0)))
-                    t0 = ticks_us()
-                    spi_write(post_frame_cmds)
-                    spi_write(post_frame_adj[fn])
-                    if (fn == 2) and (state[SSD1306_SPI_Grey_StateIndex_CopyBuffs] != 0):
-                        i = 0
-                        while i < 90:
-                            v1 = b1[i]
-                            v2 = b2[i]
-                            _b1[i] = v1 | v2
-                            _b2[i] = v2
-                            _b3[i] = v1 & v2
-                            i += 1
-                        state[SSD1306_SPI_Grey_StateIndex_CopyBuffs] = 0
-                    elif (fn == 2) and (state[SSD1306_SPI_Grey_StateIndex_ContrastChng] != 0xffff):
-                        contrast = state[SSD1306_SPI_Grey_StateIndex_ContrastChng]
-                        state[SSD1306_SPI_Grey_StateIndex_ContrastChng] = 0xffff
-                        post_frame_adj[0][1] = contrast >> 6
-                        post_frame_adj[1][1] = contrast >> 1
-                        post_frame_adj[2][1] = contrast
-                    elif state[SSD1306_SPI_Grey_StateIndex_PendingCmd]:
-                        spi_write(pending_cmds)
-                        state[SSD1306_SPI_Grey_StateIndex_PendingCmd] = 0
-                    sleep_ms((SSD1306_SPI_Grey_frame_time_us - int(ticks_diff(ticks_us(), t0))) >> 10)
-                    sleep_us(SSD1306_SPI_Grey_frame_time_us - int(ticks_diff(ticks_us(), t0)))
-                    fn += 1
-            if state[SSD1306_SPI_Grey_StateIndex_State] == SSD1306_SPI_Grey_ThreadState_Stopping:
+        while state[SSD1306_SPI_Grey_StateIndex_State] == SSD1306_SPI_Grey_ThreadState_Running:
+            fn = 0
+            while fn < 3:
+                time_out = tmr[10] + SSD1306_SPI_Grey_pre_frame_time_us
+                sio[6] = 1 << 17 # dc(0)
+                #spi_write(pre_frame_cmds, 4)
                 i = 0
-                while i < 90:
-                    _b1[i] = 0
+                while i < 4:
+                    while (spi0[3] & 2) == 0: pass
+                    spi0[2] = pre_frame_cmds[i]
                     i += 1
-                dc(1)
-                spi_write(buffers[0])
-                state[SSD1306_SPI_Grey_StateIndex_State] = SSD1306_SPI_Grey_ThreadState_Stopped
-                return
+                while (spi0[3] & 4) == 4: i = spi0[2]
+                while (spi0[3] & 0x10) == 0x10: pass
+                while (spi0[3] & 4) == 4: i = spi0[2]
 
+                sio[5] = 1 << 17 # dc(1)
+                #spi_write(buffers[fn])
+                i = 0
+                spibuff:ptr8 = ptr8(buffers[fn])
+                while i < 360:
+                    while (spi0[3] & 2) == 0: pass
+                    spi0[2] = spibuff[i]
+                    i += 1
+                while (spi0[3] & 4) == 4: i = spi0[2]
+                while (spi0[3] & 0x10) == 0x10: pass
+                while (spi0[3] & 4) == 4: i = spi0[2]
+
+                sio[6] = 1 << 17 # dc(0)
+                #spi_write(post_frame_adj[fn], 2)
+                i = 0
+                spibuff:ptr8 = ptr8(post_frame_adj[fn])
+                while i < 2:
+                    while (spi0[3] & 2) == 0: pass
+                    spi0[2] = spibuff[i]
+                    i += 1
+                while (spi0[3] & 4) == 4: i = spi0[2]
+                while (spi0[3] & 0x10) == 0x10: pass
+                while (spi0[3] & 4) == 4: i = spi0[2]
+
+                while (tmr[10] - time_out) < 0:
+                    pass
+
+                time_out = tmr[10] + SSD1306_SPI_Grey_frame_time_us
+                #spi_write(post_frame_cmds, 4)
+                i = 0
+                while i < 4:
+                    while (spi0[3] & 2) == 0: pass
+                    spi0[2] = post_frame_cmds[i]
+                    i += 1
+                #spi_write(post_frame_adj[fn], 2)
+                i = 0
+                spibuff:ptr8 = ptr8(post_frame_adj[fn])
+                while i < 2:
+                    while (spi0[3] & 2) == 0: pass
+                    spi0[2] = spibuff[i]
+                    i += 1
+                while (spi0[3] & 4) == 4: i = spi0[2]
+                while (spi0[3] & 0x10) == 0x10: pass
+                while (spi0[3] & 4) == 4: i = spi0[2]
+
+                if (fn == 2) and (state[SSD1306_SPI_Grey_StateIndex_CopyBuffs] != 0):
+                    i = 0
+                    while i < 90:
+                        v1 = b1[i]
+                        v2 = b2[i]
+                        _b1[i] = v1 | v2
+                        _b2[i] = v2
+                        _b3[i] = v1 & v2
+                        i += 1
+                    state[SSD1306_SPI_Grey_StateIndex_CopyBuffs] = 0
+                elif (fn == 2) and (state[SSD1306_SPI_Grey_StateIndex_ContrastChng] != 0xff):
+                    contrast = state[SSD1306_SPI_Grey_StateIndex_ContrastChng]
+                    state[SSD1306_SPI_Grey_StateIndex_ContrastChng] = 0xff
+                    ptr8(post_frame_adj[0])[1] = contrast >> 6
+                    ptr8(post_frame_adj[1])[1] = contrast >> 1
+                    ptr8(post_frame_adj[2])[1] = contrast
+                elif state[SSD1306_SPI_Grey_StateIndex_PendingCmd]:
+                    i = 0
+                    while i < 8:
+                        while (spi0[3] & 2) == 0: pass
+                        spi0[2] = pending_cmds[i]
+                        i += 1
+                    while (spi0[3] & 4) == 4: i = spi0[2]
+                    while (spi0[3] & 0x10) == 0x10: pass
+                    while (spi0[3] & 4) == 4: i = spi0[2]
+                    state[SSD1306_SPI_Grey_StateIndex_PendingCmd] = 0
+
+                while (tmr[10] - time_out) < 0:
+                    pass
+
+                fn += 1
+        self._thread_stopping()
+        return
+
+    @micropython.viper
+    def _thread_stopping(self):
+        _b1:ptr32 = ptr32(self._buffer1)
+        i = 0
+        while i < 90:
+            _b1[i] = 0
+            i += 1
+        self.dc(1)
+        self.spi.write(self._buffer1)
+        self._state[SSD1306_SPI_Grey_StateIndex_State] = SSD1306_SPI_Grey_ThreadState_Stopped
 
 
     @micropython.viper
